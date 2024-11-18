@@ -2,6 +2,8 @@
 
 Create beautiful custom icons for Windows drives and folders from emojis or images! Also generates macOS-compatible icon sets.
 
+WIP but basic functionality is there.  Another Claude-3.5-sonnet creation.
+
 ## ✨ Features
 
 - 🖼️ Create icons from:
@@ -22,6 +24,9 @@ Create beautiful custom icons for Windows drives and folders from emojis or imag
 # Create icons from an emoji
 python icon_maker.py --emoji fox
 
+# Create icons from a unicode string
+python icon_maker.py --emoji 1F98A
+
 # Create icons from an image
 python icon_maker.py --image path/to/image.png
 
@@ -31,10 +36,10 @@ python icon_maker.py --apply G: --drive
 # Apply to a folder
 python icon_maker.py --apply "path/to/folder"
 
-# List available emojis
+# List available emojis (WIP doesnt fetch from web properly currently)
 python icon_maker.py --list
 
-# Force Windows to refresh icons
+# Force Windows to refresh icons (careful! this is a bit of a cudgel)
 python icon_maker.py --refresh
 ```
 

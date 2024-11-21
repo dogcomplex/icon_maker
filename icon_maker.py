@@ -414,6 +414,162 @@ def list_available_emojis():
     print("\nNote: Any valid Unicode emoji code will work, even if not listed above.")
     return emojis
 
+def prepare_mac_icons(output_dir):
+    """Prepare macOS icons by creating .iconset and .icns"""
+    try:
+        mac_dir = output_dir / 'mac'
+        iconset_name = 'icon.iconset'
+        iconset_path = mac_dir / iconset_name
+        
+        # Create iconset directory
+        safe_create_dir(iconset_path)
+        
+        # Copy all PNG files to iconset with proper names
+        for png_file in mac_dir.glob('icon_*.png'):
+            new_name = png_file.name.replace('icon_', 'icon_')
+            shutil.copy2(png_file, iconset_path / new_name)
+        
+        # Create shell script for macOS conversion
+        script_path = mac_dir / 'create_icns.sh'
+        script_content = f"""#!/bin/bash
+# Convert iconset to .icns
+iconutil -c icns "{iconset_name}" -o icon.icns
+# Copy to standard locations if needed
+cp icon.icns .VolumeIcon.icns 2>/dev/null || true
+"""
+        
+        with open(script_path, 'w', newline='\n') as f:
+            f.write(script_content)
+        
+        # Make script executable on Unix-like systems
+        if os.name != 'nt':
+            os.chmod(script_path, 0o755)
+            
+        print("\nMacOS icons prepared!")
+        print(f"1. Transfer the '{output_dir}/mac' folder to your Mac")
+        print("2. Open Terminal in that directory")
+        print("3. Run: ./create_icns.sh")
+        
+    except Exception as e:
+        print(f"Warning: Could not prepare macOS icons: {e}")
+
+def create_icns_file(iconset_path, target_path):
+    """Create basic .icns file from iconset using PIL"""
+    try:
+        from PIL import Image
+        import struct
+        
+        # ICNS file structure constants
+        ICNS_MAGIC = b'icns'
+        ICON_TYPES = {
+            16: b'is32',    # 16x16
+            32: b'il32',    # 32x32
+            128: b'it32',   # 128x128
+            256: b'ic08',   # 256x256
+            512: b'ic09',   # 512x512
+            1024: b'ic10'   # 1024x1024
+        }
+
+        # Open output file
+        with open(target_path / '.VolumeIcon.icns', 'wb') as icns_file:
+            # Write ICNS header
+            icns_file.write(ICNS_MAGIC)
+            # Placeholder for total file size
+            icns_file.write(struct.pack('>I', 0))
+            
+            # Track total size
+            total_size = 8  # Size of magic + size field
+            
+            # Process each PNG in the iconset
+            for png_file in sorted(iconset_path.glob('icon_*.png')):
+                with Image.open(png_file) as img:
+                    size = img.size[0]  # Assuming square
+                    if size in ICON_TYPES:
+                        # Convert to RGBA if needed
+                        if img.mode != 'RGBA':
+                            img = img.convert('RGBA')
+                        
+                        # Save as PNG in memory
+                        from io import BytesIO
+                        png_data = BytesIO()
+                        img.save(png_data, format='PNG')
+                        png_bytes = png_data.getvalue()
+                        
+                        # Write icon type
+                        icns_file.write(ICON_TYPES[size])
+                        # Write size of this icon entry (8 bytes for header + data size)
+                        entry_size = 8 + len(png_bytes)
+                        icns_file.write(struct.pack('>I', entry_size))
+                        # Write icon data
+                        icns_file.write(png_bytes)
+                        
+                        total_size += entry_size
+            
+            # Go back and write the total file size
+            icns_file.seek(4)
+            icns_file.write(struct.pack('>I', total_size))
+        
+        print(f"Successfully created .icns file at {target_path / '.VolumeIcon.icns'}")
+        return True
+        
+    except Exception as e:
+        print(f"Error creating .icns file: {e}")
+        return False
+
+def apply_icons_to_folder(target_path, is_drive=False, windows=False, mac=False):
+    """Apply icons to target folder with support for both Windows and macOS"""
+    if not any([windows, mac]):
+        # Set default based on OS
+        windows = os.name == 'nt'
+        mac = os.name == 'posix'
+    
+    success = True
+    
+    if windows:
+        # Copy Windows-specific files
+        if is_drive:
+            shutil.copy2('icon_output/drive/.VolumeIcon.ico', target_path / '.VolumeIcon.ico')
+            shutil.copy2('icon_output/drive/autorun.inf', target_path / 'autorun.inf')
+            # Set drive attributes if on Windows
+            if os.name == 'nt':
+                set_drive_attributes(target_path)
+        else:
+            shutil.copy2('icon_output/folder/folder.ico', target_path / 'folder.ico')
+            shutil.copy2('icon_output/folder/desktop.ini', target_path / 'desktop.ini')
+            # Set folder attributes if on Windows
+            if os.name == 'nt':
+                set_folder_attributes(target_path)
+    
+    if mac:
+        # Create .iconset directory
+        iconset_path = target_path / '.iconset'
+        safe_create_dir(iconset_path)
+        
+        # Copy all PNG files
+        for png_file in Path('icon_output/mac').glob('icon_*.png'):
+            shutil.copy2(png_file, iconset_path / png_file.name)
+        
+        # Try to create .icns file
+        if create_icns_file(iconset_path, target_path):
+            print("Successfully created .icns file")
+        else:
+            # Create the shell script for manual conversion
+            script_path = target_path / 'create_icns.sh'
+            script_content = """#!/bin/bash
+iconutil -c icns .iconset -o .VolumeIcon.icns
+"""
+            with open(script_path, 'w', newline='\n') as f:
+                f.write(script_content)
+            
+            if os.name != 'nt':
+                os.chmod(script_path, 0o755)
+            
+            print("\nTo complete macOS icon setup:")
+            print("1. Open Terminal in this folder")
+            print("2. Run: ./create_icns.sh")
+    
+    return success
+
 if __name__ == "__main__":
     import argparse
     
@@ -494,6 +650,13 @@ Use with caution and save all work before running.
                        metavar='PATH',
                        help='Use local image file (PNG, JPEG, WEBP, etc.) as icon source')
     
+    parser.add_argument('--mac',
+                       action='store_true',
+                       help='Prepare macOS iconset and create .icns file')
+    
+    parser.add_argument('--windows', action='store_true', 
+                       help='Generate Windows-compatible icons (default on Windows)')
+    
     # Parse initial arguments
     args, remaining = parser.parse_known_args()
     
@@ -536,19 +699,25 @@ Use with caution and save all work before running.
     if args.refresh:
         refresh_windows_icons()
     elif args.apply:
-        output_dir = Path('icon_output')
-        if not output_dir.exists():
-            print("Error: icon_output directory not found. Run script without --apply first.")
+        windows_flag = args.windows or (os.name == 'nt' and not args.mac)
+        mac_flag = args.mac or (os.name == 'posix' and not args.windows)
+        
+        success = apply_icons_to_folder(
+            Path(args.apply),
+            is_drive=args.drive,
+            windows=windows_flag,
+            mac=mac_flag
+        )
+        if success:
+            print(f"Icons applied to: {args.apply}")
         else:
-            success = apply_to_target(output_dir, args.apply, args.drive)
-            if success:
-                print(f"Icons applied to: {args.apply}")
-            else:
-                print("\nTo retry with elevated privileges, use:")
-                print(f"python {sys.argv[0]} --apply \"{args.apply}\" {'--drive' if args.drive else ''} --force")
+            print("\nTo retry with elevated privileges, use:")
+            print(f"python {sys.argv[0]} --apply \"{args.apply}\" {'--drive' if args.drive else ''} --force")
     else:
         if args.image:
             create_all_icons(args.image)
+            if args.mac:
+                prepare_mac_icons(Path('icon_output'))
         elif args.emoji:
             # Handle emoji icon creation
             emoji_code = args.emoji.lower()
@@ -560,13 +729,22 @@ Use with caution and save all work before running.
             svg_url = f"https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/{emoji_code}.svg"
             create_all_icons(svg_url)
             
+            if args.mac:
+                prepare_mac_icons(Path('icon_output'))
+            
             # If --apply was specified, apply the icons immediately after creation
             if args.apply:
-                output_dir = Path('icon_output')
-                if output_dir.exists():
-                    success = apply_to_target(output_dir, args.apply, args.drive)
-                    if success:
-                        print(f"Icons applied to: {args.apply}")
-                    else:
-                        print("\nTo retry with elevated privileges, use:")
-                        print(f"python {sys.argv[0]} --apply \"{args.apply}\" {'--drive' if args.drive else ''} --force")
+                windows_flag = args.windows or (os.name == 'nt' and not args.mac)
+                mac_flag = args.mac or (os.name == 'posix' and not args.windows)
+                
+                success = apply_icons_to_folder(
+                    Path(args.apply),
+                    is_drive=args.drive,
+                    windows=windows_flag,
+                    mac=mac_flag
+                )
+                if success:
+                    print(f"Icons applied to: {args.apply}")
+                else:
+                    print("\nTo retry with elevated privileges, use:")
+                    print(f"python {sys.argv[0]} --apply \"{args.apply}\" {'--drive' if args.drive else ''} --force")

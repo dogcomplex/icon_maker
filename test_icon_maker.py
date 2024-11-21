@@ -146,5 +146,42 @@ class TestIconMaker(unittest.TestCase):
         # Check for valid Unicode values
         self.assertIn('U+1F', output_text, "Should contain valid Unicode points")
 
+    def test_mac_iconset_preparation(self):
+        """Test macOS iconset preparation"""
+        # Run with --mac flag
+        os.system('python icon_maker.py --mac')
+        
+        mac_dir = Path('icon_output') / 'mac'
+        iconset_dir = mac_dir / 'icon.iconset'
+        
+        # Check if iconset directory was created
+        self.assertTrue(iconset_dir.exists())
+        
+        # Check if conversion script was created
+        self.assertTrue((mac_dir / 'create_icns.sh').exists())
+        
+        # Check if PNGs were copied to iconset
+        png_count = len(list(iconset_dir.glob('icon_*.png')))
+        self.assertGreater(png_count, 0, "Should have PNG files in iconset")
+
+    def test_cross_platform_icon_application(self):
+        """Test applying both Windows and macOS icons to a folder"""
+        test_folder = self.test_dir / 'cross_platform_folder'
+        test_folder.mkdir(exist_ok=True)
+        
+        # Apply icons with both Windows and Mac support
+        os.system(f'python icon_maker.py --apply "{test_folder}" --windows --mac')
+        
+        # Check Windows files
+        self.assertTrue((test_folder / 'folder.ico').exists())
+        self.assertTrue((test_folder / 'desktop.ini').exists())
+        
+        # Check Mac files
+        self.assertTrue((test_folder / '.iconset').exists())
+        self.assertTrue(len(list((test_folder / '.iconset').glob('icon_*.png'))) > 0)
+        
+        # Check for conversion script
+        self.assertTrue((test_folder / 'create_icns.sh').exists())
+
 if __name__ == '__main__':
     unittest.main() 

@@ -92,36 +92,38 @@ def set_drive_attributes(drive_path):
 def set_folder_attributes(folder_path):
     """Set attributes for folder icon files"""
     try:
-        # Set attributes for the icon and desktop.ini
-        os.system(f'attrib +s +h "{folder_path}/desktop.ini"')
-        os.system(f'attrib +s +h "{folder_path}/folder.ico"')
+        # First, remove read-only and system attributes from the folder itself
+        os.system(f'attrib -r -s "{folder_path}"')
         
-        # Alternative 1: Use System folder type
+        # Set folder as system folder to force icon refresh
+        os.system(f'attrib +s "{folder_path}"')
+        
+        # Remove any existing attributes from the files
+        os.system(f'attrib -r -s -h "{folder_path}/desktop.ini"')
+        os.system(f'attrib -r -s -h "{folder_path}/folder.ico"')
+        
+        # Enhanced desktop.ini content with additional shell properties
         desktop_ini_content = """[.ShellClassInfo]
 IconResource=folder.ico,0
 IconFile=folder.ico
 IconIndex=0
+ConfirmFileOp=0
 [ViewState]
 Mode=
 Vid=
-FolderType=System"""
-
-        # Alternative 2: Add more shell class registrations
-        desktop_ini_content_alt = """[.ShellClassInfo]
-IconResource=folder.ico,0
-IconFile=folder.ico
-IconIndex=0
+FolderType=Pictures
 [{BE098140-A513-11D0-A3A4-00C04FD706EC}]
 IconArea_Image=folder.ico
-[ViewState]
-Mode=
-Vid=
-FolderType=Generic"""
+Attributes=1"""
 
-        # Write the enhanced desktop.ini
-        with open(folder_path / 'desktop.ini', 'w', encoding='utf-8') as f:
-            f.write(desktop_ini_content)  # or desktop_ini_content_alt
+        # Write the desktop.ini with UTF-16 LE encoding (Windows preferred)
+        with open(folder_path / 'desktop.ini', 'w', encoding='utf-16-le') as f:
+            f.write(desktop_ini_content)
             
+        # Set attributes in specific order
+        os.system(f'attrib +s +h "{folder_path}/folder.ico"')
+        os.system(f'attrib +s +h "{folder_path}/desktop.ini"')
+        
     except Exception as e:
         print(f"Warning: Could not set all folder attributes: {e}")
 
@@ -162,40 +164,29 @@ def apply_to_target(output_dir, target_path, is_drive=False):
             print("Please run the script as administrator or use the --force option to attempt elevation.")
             return False
             
-        # Remove existing files first
-        if is_drive:
-            safe_remove(target_path / '.VolumeIcon.ico')
-            safe_remove(target_path / 'autorun.inf')
-        else:
+        if not is_drive:
+            # Force remove read-only attributes from target folder
+            os.system(f'attrib -r -s "{target_path}"')
+            
+            # Remove existing files with their attributes first
+            os.system(f'attrib -r -s -h "{target_path}/desktop.ini"')
+            os.system(f'attrib -r -s -h "{target_path}/folder.ico"')
             safe_remove(target_path / 'folder.ico')
             safe_remove(target_path / 'desktop.ini')
-        
-        # Copy new files
-        if is_drive:
-            shutil.copy2(output_dir / 'drive' / '.VolumeIcon.ico', target_path)
-            shutil.copy2(output_dir / 'drive' / 'autorun.inf', target_path)
-            set_drive_attributes(target_path)
-        else:
+            
             # Copy icon file first
             shutil.copy2(output_dir / 'folder' / 'folder.ico', target_path)
             
-            # Create desktop.ini with correct path
-            desktop_ini_content = """[.ShellClassInfo]
-IconResource=folder.ico,0
-IconFile=folder.ico
-IconIndex=0
-[ViewState]
-Mode=
-Vid=
-FolderType=Generic"""
+            # Set folder attributes
+            set_folder_attributes(target_path)
             
-            # Write desktop.ini directly to target
-            with open(target_path / 'desktop.ini', 'w', encoding='utf-8') as f:
-                f.write(desktop_ini_content)
+            # Force Windows to recognize changes
+            os.system(f'ie4uinit.exe -show')
             
-            # Set attributes in correct order
-            os.system(f'attrib +s +h "{target_path}/folder.ico"')
-            os.system(f'attrib +s +h "{target_path}/desktop.ini"')
+            print("\nTip: If icon doesn't update immediately:")
+            print("1. Right-click the folder, Properties -> Customize -> Change Icon")
+            print("2. Select the folder.ico file and Apply")
+            print("3. If needed, run 'icon_maker.py --refresh' as administrator")
             
         return True
         
@@ -559,7 +550,7 @@ Use with caution and save all work before running.
         if args.image:
             create_all_icons(args.image)
         elif args.emoji:
-            # Existing emoji handling
+            # Handle emoji icon creation
             emoji_code = args.emoji.lower()
             if emoji_code not in emojis:
                 emoji_code = emoji_code.replace('u+', '').replace('0x', '')
@@ -568,3 +559,14 @@ Use with caution and save all work before running.
             
             svg_url = f"https://raw.githubusercontent.com/twitter/twemoji/master/assets/svg/{emoji_code}.svg"
             create_all_icons(svg_url)
+            
+            # If --apply was specified, apply the icons immediately after creation
+            if args.apply:
+                output_dir = Path('icon_output')
+                if output_dir.exists():
+                    success = apply_to_target(output_dir, args.apply, args.drive)
+                    if success:
+                        print(f"Icons applied to: {args.apply}")
+                    else:
+                        print("\nTo retry with elevated privileges, use:")
+                        print(f"python {sys.argv[0]} --apply \"{args.apply}\" {'--drive' if args.drive else ''} --force")

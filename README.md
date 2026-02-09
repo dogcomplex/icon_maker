@@ -18,37 +18,68 @@ WIP but basic functionality is there.  Another Claude-3.5-sonnet creation.
   - Windows icon cache refresh
   - Registry optimization for drive icons
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Windows one-click install)
+
+1) Double-click `install_iconify.cmd`
+
+2) Open a **new** terminal and run:
+
+```bat
+iconify
+```
+
+This launches an interactive step-by-step wizard.
+
+Installer details:
+- Writes the executable to `%LOCALAPPDATA%\\iconify\\iconify.exe`
+- Drops a small `iconify.cmd` shim into `%USERPROFILE%\\.local\\bin` (**already on PATH for many dev setups**) so `iconify` works everywhere without editing PATH manually.
+
+## 🚀 Quick Start (from source checkout)
+
+If you just cloned this repo and want to run without installing:
+
+```bat
+python icon_maker.py --wizard
+```
 
 ```bash
-# Create icons from an emoji
-python icon_maker.py --emoji fox
+# Create icons from a Twemoji emoji (high quality SVG -> PNG -> ICO)
+python icon_maker.py --emoji fox --output icon_output
 
-# Create icons from a unicode string
-python icon_maker.py --emoji 1F98A
-
-# Create icons from an image
-python icon_maker.py --image path/to/image.png
-
-# Apply to a drive
-python icon_maker.py --apply G: --drive
+# Create icons from Emojipedia (best-effort, prefers larger artwork)
+python icon_maker.py --emojipedia fox --output icon_output
 
 # Apply to a folder
-python icon_maker.py --apply "path/to/folder"
+python icon_maker.py --emoji fox --output icon_output --apply "path\\to\\folder"
 
-# List available emojis (WIP doesnt fetch from web properly currently)
-python icon_maker.py --list
+# Apply to a drive root (may require admin for best persistence)
+python icon_maker.py --emoji fox --output icon_output --apply "G:\\" --drive --force
 
 # Force Windows to refresh icons (careful! this is a bit of a cudgel)
-python icon_maker.py --refresh
+python icon_maker.py --refresh --force
 ```
 
 ## 📋 Requirements
 
-- Python 3.7+
+- Python 3.8+
 - Pillow
 - cairosvg
 - requests
+
+## 🧰 CLI
+
+After installing, you’ll have a global `iconify` command.
+
+Common examples:
+
+```bat
+iconify
+iconify --emoji fox --apply "C:\\path\\to\\folder"
+iconify --emojipedia lotus --result 0 --emojipedia-art twemoji
+iconify --emojipedia lotus --result 0 --emojipedia-art design --design 0
+iconify --emojipedia lotus --pick --emojipedia-art design
+iconify --emoji fox --no-apply
+```
 
 ## 🔧 Installation
 

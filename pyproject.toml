@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iconify"
+version = "0.1.0"
+description = "Create and apply custom Windows/macOS folder/drive icons from emoji or images."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Warren Koch" }]
+dependencies = [
+  "Pillow>=10.0.0",
+  "cairosvg>=2.7.0",
+  "requests>=2.31.0",
+]
+
+[project.scripts]
+iconify = "iconify.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
